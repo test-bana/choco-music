@@ -1,128 +1,82 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 import os
-import string
-import random
+import io
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+app = Flask(__name__, template_folder='templates', static_folder='static')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'choco-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB limit
 
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Fix for Render/PostgreSQL connection string
+if app.config['SQLALCHEMY_DATABASE_URI'] and app.config['SQLALCHEMY_DATABASE_URI'].startswith("postgres://"):
+    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace("postgres://", "postgresql://", 1)
+
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB limit
 
 db = SQLAlchemy(app)
 
-class AudioFile(db.Model):
+class Music(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
-    display_name = db.Column(db.String(255), nullable=False)
-    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
-
-class ShortURL(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    original_url = db.Column(db.String(500), nullable=False)
-    short_code = db.Column(db.String(10), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-def generate_short_code():
-    characters = string.ascii_letters + string.digits
-    while True:
-        code = ''.join(random.choices(characters, k=6))
-        if not ShortURL.query.filter_by(short_code=code).first():
-            return code
+    title = db.Column(db.String(255), nullable=False)
+    data = db.Column(db.LargeBinary, nullable=False)  # MP3 data stored as BLOB
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 with app.app_context():
     db.create_all()
 
 @app.route('/')
 def index():
-    files = AudioFile.query.order_by(AudioFile.upload_date.desc()).all()
-    urls = ShortURL.query.order_by(ShortURL.created_at.desc()).all()
-    return render_template('index.html', files=files, urls=urls)
+    music_list = Music.query.order_by(Music.uploaded_at.desc()).all()
+    return render_template('index.html', music_list=music_list)
 
 @app.route('/upload', methods=['POST'])
-def upload_file():
+def upload():
     if 'file' not in request.files:
         flash('ファイルがありません')
-        return redirect(request.url)
+        return redirect(url_for('index'))
     file = request.files['file']
     if file.filename == '':
         flash('ファイルが選択されていません')
-        return redirect(request.url)
-    if file and file.filename.lower().endswith('.mp3'):
-        filename = secure_filename(file.filename)
-        base_name = os.path.splitext(filename)[0]
-        ext = os.path.splitext(filename)[1]
-        unique_filename = f"{base_name}_{int(datetime.now().timestamp())}{ext}"
-        
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-        
-        new_file = AudioFile(filename=unique_filename, display_name=filename)
-        db.session.add(new_file)
-        db.session.commit()
-        flash('アップロードが完了しました')
-    else:
-        flash('MP3ファイルのみアップロード可能です')
-    
-    return redirect(url_for('index'))
-
-@app.route('/shorten', methods=['POST'])
-def shorten_url():
-    original_url = request.form.get('url')
-    if not original_url:
-        flash('URLを入力してください')
         return redirect(url_for('index'))
-    
-    if not (original_url.startswith('http://') or original_url.startswith('https://')):
-        original_url = 'https://' + original_url
-
-    short_code = generate_short_code()
-    new_url = ShortURL(original_url=original_url, short_code=short_code)
-    db.session.add(new_url)
-    db.session.commit()
-    flash('URLを短縮しました')
-    return redirect(url_for('index'))
-
-@app.route('/r/<short_code>')
-def redirect_to_url(short_code):
-    link = ShortURL.query.filter_by(short_code=short_code).first_or_404()
-    return redirect(link.original_url)
-
-@app.route('/download/<int:file_id>')
-def download_file(file_id):
-    audio = AudioFile.query.get_or_404(file_id)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], audio.filename, as_attachment=True)
-
-@app.route('/play/<int:file_id>')
-def play_file(file_id):
-    audio = AudioFile.query.get_or_404(file_id)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], audio.filename)
-
-@app.route('/delete/<int:file_id>', methods=['POST'])
-def delete_file(file_id):
-    audio = AudioFile.query.get_or_404(file_id)
-    try:
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], audio.filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        db.session.delete(audio)
+    if file and file.filename and file.filename.lower().endswith('.mp3'):
+        filename_str = file.filename
+        safe_filename = secure_filename(filename_str)
+        file_data = file.read()
+        new_music = Music()
+        new_music.filename = safe_filename
+        new_music.title = filename_str
+        new_music.data = file_data
+        db.session.add(new_music)
         db.session.commit()
-        flash('削除しました')
-    except Exception as e:
-        flash(f'エラーが発生しました: {str(e)}')
+        flash('アップロード成功！')
+    else:
+        flash('MP3ファイルのみ対応しています')
     return redirect(url_for('index'))
 
-@app.route('/delete_url/<int:url_id>', methods=['POST'])
-def delete_url(url_id):
-    link = ShortURL.query.get_or_404(url_id)
-    db.session.delete(link)
+@app.route('/stream/<int:music_id>')
+def stream(music_id):
+    music = Music.query.get_or_404(music_id)
+    return Response(music.data, mimetype='audio/mpeg')
+
+@app.route('/download/<int:music_id>')
+def download(music_id):
+    music = Music.query.get_or_404(music_id)
+    return send_file(
+        io.BytesIO(music.data),
+        mimetype='audio/mpeg',
+        as_attachment=True,
+        download_name=music.filename
+    )
+
+@app.route('/delete/<int:music_id>', methods=['POST'])
+def delete(music_id):
+    music = Music.query.get_or_404(music_id)
+    db.session.delete(music)
     db.session.commit()
-    flash('URLを削除しました')
+    flash('削除しました')
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
