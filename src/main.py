@@ -1,9 +1,13 @@
+import sys
+import os
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, Response
 from flask_sqlalchemy import SQLAlchemy
-import os
 import io
 from datetime import datetime
 from werkzeug.utils import secure_filename
+
+# Add current directory to path to ensure local imports work
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database_config import get_sqlalchemy_uri
 
@@ -39,38 +43,52 @@ def upload():
     if file.filename == '':
         flash('ファイルが選択されていません')
         return redirect(url_for('index'))
-    if file and file.filename and file.filename.lower().endswith('.mp3'):
-        filename_str = file.filename
-        safe_filename = secure_filename(filename_str)
-        file_data = file.read()
-        new_music = Music()
-        new_music.filename = safe_filename
-        new_music.title = filename_str
-        new_music.data = file_data
-        db.session.add(new_music)
-        db.session.commit()
-        flash('アップロード成功！')
+    
+    allowed_extensions = {'.mp3', '.mp4'}
+    if file and file.filename:
+        filename_str = str(file.filename)
+        file_ext = os.path.splitext(filename_str)[1].lower()
+        
+        if file_ext in allowed_extensions:
+            safe_filename = secure_filename(filename_str)
+            file_data = file.read()
+            new_music = Music()
+            new_music.filename = safe_filename
+            new_music.title = filename_str
+            new_music.data = file_data
+            db.session.add(new_music)
+            db.session.commit()
+            flash('アップロード成功！')
+        else:
+            flash('MP3またはMP4ファイルのみ対応しています')
     else:
-        flash('MP3ファイルのみ対応しています')
+        flash('ファイル名が無効です')
     return redirect(url_for('index'))
 
 @app.route('/stream/<int:music_id>')
 def stream(music_id):
     music = Music.query.get_or_404(music_id)
-    return Response(music.data, mimetype='audio/mpeg')
+    mimetype = 'video/mp4' if music.filename.lower().endswith('.mp4') else 'audio/mpeg'
+    return Response(music.data, mimetype=mimetype)
 
 @app.route('/download/<int:music_id>')
 def download(music_id):
     music = Music.query.get_or_404(music_id)
+    mimetype = 'video/mp4' if music.filename.lower().endswith('.mp4') else 'audio/mpeg'
     return send_file(
         io.BytesIO(music.data),
-        mimetype='audio/mpeg',
+        mimetype=mimetype,
         as_attachment=True,
         download_name=music.filename
     )
 
 @app.route('/delete/<int:music_id>', methods=['POST'])
 def delete(music_id):
+    password = request.form.get('password')
+    if password != 'choco-banana-':
+        flash('パスワードが間違っています')
+        return redirect(url_for('index'))
+        
     music = Music.query.get_or_404(music_id)
     db.session.delete(music)
     db.session.commit()
