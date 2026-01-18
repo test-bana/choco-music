@@ -135,7 +135,8 @@
                 </audio>
                 <div class="card-actions">
                     <a href="{{ url_for('download', music_id=music.id) }}" class="btn btn-download">保存する</a>
-                    <form action="{{ url_for('delete', music_id=music.id) }}" method="post" onsubmit="return confirm('削除しますか？')">
+                    <form action="{{ url_for('delete', music_id=music.id) }}" method="post" style="display: flex; gap: 5px;">
+                        <input type="password" name="password" placeholder="パスワード" required style="width: 80px; padding: 5px; border-radius: 5px; border: 1px solid #ccc; font-size: 0.8em;">
                         <button type="submit" class="btn btn-delete">削除</button>
                     </form>
                 </div>
