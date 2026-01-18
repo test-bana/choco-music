@@ -5,13 +5,11 @@ import io
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
+from database_config import get_sqlalchemy_uri
+
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'choco-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-
-# Fix for Render/PostgreSQL connection string
-if app.config['SQLALCHEMY_DATABASE_URI'] and app.config['SQLALCHEMY_DATABASE_URI'].startswith("postgres://"):
-    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = get_sqlalchemy_uri()
 
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB limit
 
