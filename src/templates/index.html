@@ -9,13 +9,29 @@
             --primary: #6f4e37;
             --secondary: #ecf0f1;
             --accent: #d35400;
+            --bg-color: #fdf5e6;
+            --card-bg: white;
+            --text-color: #333;
+            --border-color: #ccc;
         }
+
+        [data-theme="dark"] {
+            --primary: #d2a679;
+            --secondary: #2c3e50;
+            --accent: #e67e22;
+            --bg-color: #1a120b;
+            --card-bg: #2d1e12;
+            --text-color: #f5f5f5;
+            --border-color: #4d331f;
+        }
+
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: #fdf5e6;
+            background-color: var(--bg-color);
             margin: 0;
             padding: 20px;
-            color: #333;
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
         }
         .container {
             max-width: 900px;
@@ -23,15 +39,60 @@
         }
         header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 20px;
+            position: relative;
         }
         h1 {
             color: var(--primary);
             font-size: 3em;
             margin-bottom: 10px;
         }
+
+        .theme-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .search-container input {
+            flex: 1;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+        .search-container select {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+
         .upload-card {
-            background: white;
+            background: var(--card-bg);
             padding: 30px;
             border-radius: 15px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -40,6 +101,7 @@
         }
         .upload-card input[type="file"] {
             margin-bottom: 15px;
+            color: var(--text-color);
         }
         .btn {
             padding: 10px 25px;
@@ -53,6 +115,7 @@
         .btn-primary { background-color: var(--primary); color: white; }
         .btn-download { background-color: #27ae60; color: white; text-decoration: none; display: inline-block; font-size: 0.9em; }
         .btn-delete { background-color: #e74c3c; color: white; font-size: 0.8em; }
+        .btn-edit { background-color: #f39c12; color: white; font-size: 0.8em; }
 
         .music-grid {
             display: grid;
@@ -60,7 +123,7 @@
             gap: 20px;
         }
         .music-card {
-            background: white;
+            background: var(--card-bg);
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.05);
@@ -74,6 +137,9 @@
             font-size: 1.1em;
             color: var(--primary);
             word-break: break-all;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .music-date {
             font-size: 0.8em;
@@ -85,9 +151,15 @@
         }
         .card-actions {
             display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .action-row {
+            display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 5px;
+            gap: 5px;
         }
         .flash {
             background-color: #d4edda;
@@ -97,11 +169,20 @@
             margin-bottom: 20px;
             text-align: center;
         }
+
+        .edit-form {
+            display: none;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.05);
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
             <h1>choco-music 🍫</h1>
             <p>みんなで音楽をシェアしよう</p>
         </header>
@@ -122,13 +203,36 @@
             </form>
         </div>
 
+        <div class="search-container">
+            <form action="{{ url_for('index') }}" method="get" style="display: flex; gap: 10px; width: 100%;">
+                <input type="text" name="q" placeholder="ファイル名で検索..." value="{{ request.args.get('q', '') }}">
+                <select name="type">
+                    <option value="">すべて</option>
+                    <option value="music" {% if request.args.get('type') == 'music' %}selected{% endif %}>音楽 (MP3)</option>
+                    <option value="video" {% if request.args.get('type') == 'video' %}selected{% endif %}>動画 (MP4)</option>
+                </select>
+                <button type="submit" class="btn btn-primary">検索</button>
+            </form>
+        </div>
+
         <h2>みんなの投稿一覧</h2>
         <div class="music-grid">
             {% for music in music_list %}
             <div class="music-card">
                 <div>
-                    <div class="music-title">{{ music.title }}</div>
+                    <div class="music-title">
+                        <span>{{ music.title }}</span>
+                        <button class="btn btn-edit" onclick="toggleEdit('{{ music.id }}')" style="padding: 2px 8px; font-size: 0.7em;">編集</button>
+                    </div>
                     <div class="music-date">{{ music.uploaded_at.strftime('%Y/%m/%d %H:%M') }}</div>
+                    
+                    <div id="edit-{{ music.id }}" class="edit-form">
+                        <form action="{{ url_for('edit_title', music_id=music.id) }}" method="post" style="display: flex; flex-direction: column; gap: 5px;">
+                            <input type="text" name="new_title" value="{{ music.title }}" required style="padding: 5px; border-radius: 5px; border: 1px solid var(--border-color);">
+                            <input type="password" name="password" placeholder="パスワード" required style="padding: 5px; border-radius: 5px; border: 1px solid var(--border-color);">
+                            <button type="submit" class="btn btn-edit">保存</button>
+                        </form>
+                    </div>
                 </div>
                 {% if music.filename.lower().endswith('.mp4') %}
                 <video controls style="width: 100%; border-radius: 8px;">
@@ -141,17 +245,46 @@
                 </audio>
                 {% endif %}
                 <div class="card-actions">
-                    <a href="{{ url_for('download', music_id=music.id) }}" class="btn btn-download">保存する</a>
-                    <form action="{{ url_for('delete', music_id=music.id) }}" method="post" style="display: flex; gap: 5px;">
-                        <input type="password" name="password" placeholder="パスワード" required style="width: 80px; padding: 5px; border-radius: 5px; border: 1px solid #ccc; font-size: 0.8em;">
-                        <button type="submit" class="btn btn-delete">削除</button>
-                    </form>
+                    <div class="action-row">
+                        <a href="{{ url_for('download', music_id=music.id) }}" class="btn btn-download">保存する</a>
+                        <form action="{{ url_for('delete', music_id=music.id) }}" method="post" style="display: flex; gap: 5px;">
+                            <input type="password" name="password" placeholder="パス" required style="width: 50px; padding: 5px; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8em;">
+                            <button type="submit" class="btn btn-delete">削除</button>
+                        </form>
+                    </div>
                 </div>
             </div>
             {% else %}
-            <p style="text-align: center; grid-column: 1/-1;">まだ投稿がありません。最初の1曲を投稿してみよう！</p>
+            <p style="text-align: center; grid-column: 1/-1;">条件に合う投稿がありません。</p>
             {% endfor %}
         </div>
     </div>
+
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('themeBtn');
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+                btn.innerText = '🌙';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                btn.innerText = '☀️';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // ページ読み込み時にテーマを復元
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+            document.getElementById('themeBtn').innerText = '☀️';
+        }
+
+        function toggleEdit(id) {
+            const form = document.getElementById('edit-' + id);
+            form.style.display = form.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
 </body>
 </html>
