@@ -68,8 +68,33 @@ def upload():
 @app.route('/stream/<int:music_id>')
 def stream(music_id):
     music = Music.query.get_or_404(music_id)
+    data = music.data
+    size = len(data)
     mimetype = 'video/mp4' if music.filename.lower().endswith('.mp4') else 'audio/mpeg'
-    return Response(music.data, mimetype=mimetype)
+
+    range_header = request.headers.get('Range', None)
+    if not range_header:
+        return Response(data, mimetype=mimetype)
+
+    # Simple Range header parsing (e.g., "bytes=0-100")
+    try:
+        byte_range = range_header.replace('bytes=', '').split('-')
+        start = int(byte_range[0])
+        end = int(byte_range[1]) if byte_range[1] else size - 1
+    except (ValueError, IndexError):
+        return Response(data, mimetype=mimetype)
+
+    if start >= size:
+        return Response(status=416)
+
+    end = min(end, size - 1)
+    chunk_data = data[start:end+1]
+    
+    rv = Response(chunk_data, 206, mimetype=mimetype, content_type=mimetype, direct_passthrough=True)
+    rv.headers.add('Content-Range', f'bytes {start}-{end}/{size}')
+    rv.headers.add('Accept-Ranges', 'bytes')
+    rv.headers.add('Content-Length', str(len(chunk_data)))
+    return rv
 
 @app.route('/download/<int:music_id>')
 def download(music_id):
