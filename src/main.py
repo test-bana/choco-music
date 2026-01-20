@@ -31,8 +31,40 @@ with app.app_context():
 
 @app.route('/')
 def index():
-    music_list = Music.query.order_by(Music.uploaded_at.desc()).all()
+    query = request.args.get('q', '')
+    file_type = request.args.get('type', '')
+    
+    music_query = Music.query
+    
+    if query:
+        music_query = music_query.filter(Music.title.ilike(f'%{query}%'))
+    
+    if file_type == 'music':
+        music_query = music_query.filter(Music.filename.ilike('%.mp3'))
+    elif file_type == 'video':
+        music_query = music_query.filter(Music.filename.ilike('%.mp4'))
+        
+    music_list = music_query.order_by(Music.uploaded_at.desc()).all()
     return render_template('index.html', music_list=music_list)
+
+@app.route('/edit_title/<int:music_id>', methods=['POST'])
+def edit_title(music_id):
+    password = request.form.get('password')
+    new_title = request.form.get('new_title')
+    
+    if password != 'choco-banana-':
+        flash('パスワードが間違っています')
+        return redirect(url_for('index'))
+        
+    if not new_title:
+        flash('タイトルを入力してください')
+        return redirect(url_for('index'))
+        
+    music = Music.query.get_or_404(music_id)
+    music.title = new_title
+    db.session.commit()
+    flash('タイトルを更新しました')
+    return redirect(url_for('index'))
 
 @app.route('/upload', methods=['POST'])
 def upload():
