@@ -14,6 +14,10 @@ from database_config import get_sqlalchemy_uri
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'choco-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = get_sqlalchemy_uri()
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB limit
 
@@ -100,6 +104,10 @@ def upload():
 @app.route('/stream/<int:music_id>')
 def stream(music_id):
     music = Music.query.get_or_404(music_id)
+    # 大容量データの読み込みによるメモリ不足（SIGKILL）を避けるため、
+    # データを io.BytesIO でラップし、必要な範囲のみを抽出するように検討
+    # ただし、現状は LargeBinary なのでメモリ上に一度載る必要がある
+    # 将来的には外部ストレージへの移行を推奨
     data = music.data
     size = len(data)
     mimetype = 'video/mp4' if music.filename.lower().endswith('.mp4') else 'audio/mpeg'
