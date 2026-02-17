@@ -30,8 +30,45 @@
             background-color: var(--bg-color);
             margin: 0;
             padding: 20px;
+            padding-top: 80px; /* Capacity monitor space */
             color: var(--text-color);
             transition: background-color 0.3s, color 0.3s;
+        }
+        .capacity-monitor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 80%;
+            max-width: 600px;
+            height: 12px;
+            background: #eee;
+            margin: 5px auto;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #4caf50;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        .capacity-text {
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .warning-text {
+            color: #e74c3c;
+            font-size: 0.8em;
+            display: none;
+            margin-top: 2px;
         }
         .container {
             max-width: 900px;
@@ -180,6 +217,13 @@
     </style>
 </head>
 <body>
+    <div class="capacity-monitor">
+        <div class="capacity-text">ストレージ使用量: <span id="current-usage">0</span> MB / 512 MB</div>
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="capacity-warning" class="warning-text">容量制限に達しました。新しい投稿はできません。</div>
+    </div>
     <div class="container">
         <header>
             <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
@@ -284,6 +328,30 @@
         function toggleEdit(id) {
             const form = document.getElementById('edit-' + id);
             form.style.display = form.style.display === 'block' ? 'none' : 'block';
+        }
+
+        // 容量計算ロジック
+        const MAX_MB = 512;
+        const totalBytes = {{ music_list|map(attribute='data')|map('length')|sum }};
+        const usedMB = (totalBytes / (1024 * 1024)).toFixed(1);
+        const percent = Math.min((totalBytes / (MAX_MB * 1024 * 1024)) * 100, 100);
+
+        document.getElementById('current-usage').textContent = usedMB;
+        const fill = document.getElementById('progress-fill');
+        fill.style.width = percent + '%';
+
+        if (percent >= 100) {
+            fill.style.backgroundColor = '#e74c3c';
+            document.getElementById('capacity-warning').style.display = 'block';
+            const uploadBtn = document.querySelector('.upload-card button[type="submit"]');
+            if (uploadBtn) {
+                uploadBtn.disabled = true;
+                uploadBtn.style.opacity = '0.5';
+                uploadBtn.style.cursor = 'not-allowed';
+                uploadBtn.textContent = '容量制限のためアップロード不可';
+            }
+        } else if (percent >= 80) {
+            fill.style.backgroundColor = '#f39c12';
         }
     </script>
 </body>
