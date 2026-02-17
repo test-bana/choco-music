@@ -72,10 +72,21 @@ def edit_title(music_id):
 
 @app.route('/upload', methods=['POST'])
 def upload():
+    # 容量チェック (512MB制限)
+    MAX_SIZE_BYTES = 512 * 1024 * 1024
+    current_total = db.session.query(db.func.sum(db.func.length(Music.data))).scalar() or 0
+    
     if 'file' not in request.files:
         flash('ファイルがありません')
         return redirect(url_for('index'))
     file = request.files['file']
+    
+    # 読み込む前にファイルサイズを確認（werkzeug.datastructures.FileStorage には content_length がない場合があるため read() 後の長さで判断）
+    file_data = file.read()
+    if current_total + len(file_data) > MAX_SIZE_BYTES:
+        flash('エラー：ストレージ容量(512MB)の上限に達するためアップロードできません。不要なファイルを削除してください。')
+        return redirect(url_for('index'))
+
     if file.filename == '':
         flash('ファイルが選択されていません')
         return redirect(url_for('index'))
@@ -87,7 +98,6 @@ def upload():
         
         if file_ext in allowed_extensions:
             safe_filename = secure_filename(filename_str)
-            file_data = file.read()
             new_music = Music()
             new_music.filename = safe_filename
             new_music.title = filename_str
